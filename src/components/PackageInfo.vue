@@ -13,8 +13,8 @@
     <hr class="divider">
 
     <div v-show="packageInfoVisible" class="packageInfo">
-      <div v-if="selectedPackage && selectedPackage.name">
-        <a :href="'https://npmjs.org/package/' + selectedPackage.name">{{ selectedPackage.name }}</a>
+      <div v-if="selectedPackage && selectedPackage.name && !selectedPackage._unresolvable">
+        <a :href="'https://pub.dev/packages/' + selectedPackage.name" target="_blank">{{ selectedPackage.name }}</a>
         <span v-if="!versions" class="version" title="version">{{ selectedPackage.version }}</span>
         <span v-if="versions" class="version" title="version">
           <select v-model="selectedVersion" @change="renderUpdatedVersion">
@@ -22,18 +22,39 @@
           </select>
         </span>
         <p class="description">{{ selectedPackage.description }}</p>
-        <pre class="sh sh_sourceCode"><code>npm install {{ selectedPackage.name }}</code><button class="copy-btn" title="Copy to clipboard" @click="copyInstallCommand(selectedPackage.name)">{{ copyLabel }}</button></pre>
-        <div class="maintainers">
-          <h4>maintainers</h4>
-          <div class="maintainersContainer">
-            <div v-for="maintainer in nodeMaintainers" :key="maintainer.email" class="maintainerBox">
-              <a :href="maintainer.profile" target="_blank">
-                <img :src="maintainer.avatar">
-              </a>
-            </div>
-          </div>
-          <div class="clearfix"></div>
+        <pre class="sh sh_sourceCode"><code>flutter pub add {{ selectedPackage.name }}</code><button class="copy-btn" title="Copy to clipboard" @click="copyInstallCommand(selectedPackage.name)">{{ copyLabel }}</button></pre>
+
+        <div v-if="selectedPackage.repository || selectedPackage.homepage" class="package-links">
+          <h4>links</h4>
+          <ul class="link-list">
+            <li v-if="selectedPackage.homepage">
+              <a :href="selectedPackage.homepage" target="_blank">homepage</a>
+            </li>
+            <li v-if="selectedPackage.repository">
+              <a :href="selectedPackage.repository" target="_blank">repository</a>
+            </li>
+            <li v-if="selectedPackage.issue_tracker">
+              <a :href="selectedPackage.issue_tracker" target="_blank">issue tracker</a>
+            </li>
+            <li v-if="selectedPackage.documentation">
+              <a :href="selectedPackage.documentation" target="_blank">documentation</a>
+            </li>
+          </ul>
         </div>
+
+        <div v-if="selectedPackage.topics && selectedPackage.topics.length" class="package-topics">
+          <h4>topics</h4>
+          <span v-for="t in selectedPackage.topics" :key="t" class="topic-chip">{{ t }}</span>
+        </div>
+
+        <div v-if="selectedPackage.environment" class="package-env">
+          <h4>environment</h4>
+          <ul class="env-list">
+            <li v-if="selectedPackage.environment.sdk">dart sdk: {{ selectedPackage.environment.sdk }}</li>
+            <li v-if="selectedPackage.environment.flutter">flutter: {{ selectedPackage.environment.flutter }}</li>
+          </ul>
+        </div>
+
         <div v-if="nodeVulns.length" class="node-vulnerabilities">
           <h4>vulnerabilities</h4>
           <div v-for="vuln in nodeVulns" :key="vuln.id" class="vuln-item">
@@ -47,9 +68,14 @@
           </div>
         </div>
       </div>
+      <div v-else-if="selectedPackage && selectedPackage._unresolvable">
+        <h4>{{ selectedPackage.name }}</h4>
+        <p class="description">{{ selectedPackage.description }}</p>
+        <p class="version">{{ selectedPackage.version }}</p>
+      </div>
       <div v-else-if="selectedPackage">
-        <h4>Remote dependency</h4>
-        <pre class="sh sh_sourceCode"><code>npm install {{ selectedPackage.id }}</code><button class="copy-btn" title="Copy to clipboard" @click="copyInstallCommand(selectedPackage.id)">{{ copyLabel }}</button></pre>
+        <h4>External dependency</h4>
+        <pre class="sh sh_sourceCode"><code>flutter pub add {{ selectedPackage.id }}</code><button class="copy-btn" title="Copy to clipboard" @click="copyInstallCommand(selectedPackage.id)">{{ copyLabel }}</button></pre>
       </div>
     </div>
 
@@ -64,45 +90,19 @@
       </div>
       <div class="clearfix"></div>
       <hr>
-      <div class="all-maintainers">
-        <h4>maintainers</h4>
-        <div class="maintainersContainer">
-          <div
-            v-for="maintainer in allMaintainers"
-            :key="maintainer.email"
-            class="maintainerBox"
-            :class="{ selected: maintainer.selected }"
-            @click="highlightNodes(maintainer, $event)"
-          >
-            <a :href="maintainer.profile" target="_blank">
-              <img
-                :src="maintainer.avatar"
-                @mouseenter="maintainer.countVisible = true"
-                @mouseleave="maintainer.countVisible = false"
-              >
-            </a>
-            <span v-show="maintainer.countVisible" class="packagesCount">
-              x {{ maintainer.count }}
-            </span>
-            <div class="border"></div>
-          </div>
-        </div>
-        <div class="clearfix"></div>
-      </div>
-      <hr>
       <div class="all-licenses">
-        <h4>licenses</h4>
+        <h4>topics</h4>
         <div class="license-container">
           <a
-            v-for="license in allLicenses"
-            :key="license.name"
+            v-for="topic in allTopics"
+            :key="topic.name"
             class="license-row"
             href="#"
-            :class="{ selected: license.selected }"
-            @click.prevent="highlightNodes(license, $event)"
+            :class="{ selected: topic.selected }"
+            @click.prevent="highlightNodes(topic, $event)"
           >
-            <span>{{ license.name }}</span>
-            <span class="last">{{ license.count }}</span>
+            <span>{{ topic.name }}</span>
+            <span class="last">{{ topic.count }}</span>
           </a>
         </div>
         <div class="clearfix"></div>
@@ -149,13 +149,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import toGravatar from '../toGravatar.js'
 import getPackageVersions from '../getPackageVersions.js'
 import getLocation from '../getLocation.js'
-import getAllLicenses from '../licenses.js'
-import getAllMaintainers from '../maintainers.js'
+import getAllTopics from '../topics.js'
 import getAllNames from '../names.js'
 import { getVulnSummary } from '../vulnerabilities.js'
 
@@ -190,19 +188,17 @@ watch(() => props.vulnMap, (vulnMap) => {
 })
 
 const selectedPackage = ref(null)
-const nodeMaintainers = ref([])
 const versions = ref(null)
 const selectedVersion = ref('')
 
 const nodesCount = ref(0)
 const linksCount = ref(0)
-const allMaintainers = ref([])
-const allLicenses = ref([])
+const allTopics = ref([])
 const allNames = ref([])
 
 const copyLabel = ref('copy')
 let copyTimer = null
-let selectedLicenseRecord = null
+let selectedHighlightRecord = null
 
 const allVulnerabilities = ref([])
 const totalVulnCount = ref(0)
@@ -220,8 +216,7 @@ function onGraphLoaded(graph) {
   nodesCount.value = graph.getNodesCount()
   graphLoaded.value = true
 
-  allMaintainers.value = getAllMaintainers(graph)
-  allLicenses.value = getAllLicenses(graph)
+  allTopics.value = getAllTopics(graph)
   allNames.value = getAllNames(graph)
 
   selectNode(graph.root)
@@ -238,13 +233,7 @@ function selectNode(node) {
   selectedNodeId = node.id
   versions.value = null
 
-  if (data.maintainers && data.maintainers.length) {
-    nodeMaintainers.value = data.maintainers.map(toGravatar)
-  } else {
-    nodeMaintainers.value = []
-  }
-
-  if (!data.remote) {
+  if (!data.remote && !data._unresolvable) {
     var name = data.name
     getPackageVersions(name).then(function (v) {
       if (v && selectedPackage.value && selectedPackage.value.name === name) {
@@ -254,7 +243,6 @@ function selectNode(node) {
     })
   }
 
-  // Look up vulnerabilities for this node
   if (props.vulnMap) {
     nodeVulns.value = props.vulnMap.get(node.id) || []
   } else {
@@ -267,7 +255,6 @@ function onVulnDataLoaded(vulnMap) {
   totalVulnCount.value = 0
   allVulnerabilities.value.forEach(function (r) { totalVulnCount.value += r.count })
 
-  // Update nodeVulns for current selection
   if (selectedNodeId && vulnMap) {
     nodeVulns.value = vulnMap.get(selectedNodeId) || []
   }
@@ -292,20 +279,16 @@ function renderUpdatedVersion() {
 function highlightNodes(record, e) {
   e.preventDefault()
 
-  emit('highlight-node', {
-    color: '#52CCE3',
-    ids: record.packages
-  })
+  if (selectedHighlightRecord) selectedHighlightRecord.selected = false
+  selectedHighlightRecord = record
+  if (selectedHighlightRecord) selectedHighlightRecord.selected = true
 
-  if (selectedLicenseRecord) selectedLicenseRecord.selected = false
-  selectedLicenseRecord = record
-  if (selectedLicenseRecord) selectedLicenseRecord.selected = true
-
+  emit('highlight-node', { color: '#52CCE3', ids: record.packages })
   responsiveOpen.value = false
 }
 
 function copyInstallCommand(name) {
-  navigator.clipboard.writeText('npm install ' + name).then(function () {
+  navigator.clipboard.writeText('flutter pub add ' + name).then(function () {
     copyLabel.value = 'copied!'
     clearTimeout(copyTimer)
     copyTimer = setTimeout(function () { copyLabel.value = 'copy' }, 1500)
@@ -314,3 +297,26 @@ function copyInstallCommand(name) {
 
 defineExpose({ onNodeSelected, onGraphLoaded, onVulnDataLoaded })
 </script>
+
+<style scoped>
+.topic-chip {
+  display: inline-block;
+  background: #2a2a3a;
+  color: #ccd;
+  padding: 2px 8px;
+  margin: 2px 4px 2px 0;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.package-links ul.link-list,
+.package-env ul.env-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 4px 0;
+}
+.package-links li,
+.package-env li {
+  padding: 2px 0;
+  font-size: 12px;
+}
+</style>
