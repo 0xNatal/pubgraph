@@ -53,9 +53,9 @@
 <script setup>
 import { ref, shallowRef, reactive, markRaw, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import buildGraph, { buildGraphFromJson, parsePackageId } from '../graphBuilder.js'
+import buildGraph, { buildGraphFromUpload, parsePackageId } from '../graphBuilder.js'
 import getLocation from '../getLocation.js'
-import { uploadedPackageJson, includeDevDeps } from '../uploadStore.js'
+import { uploadedFile, includeDevDeps, includeOverrides } from '../uploadStore.js'
 import { scanVulnerabilities } from '../vulnerabilities.js'
 import GraphViewer from './GraphViewer.vue'
 import PackageInfo from './PackageInfo.vue'
@@ -80,13 +80,24 @@ var pendingGraphBuilder = null
 
 onMounted(() => {
   if (route.params.pkgId === '~upload') {
-    if (!uploadedPackageJson.value) {
+    if (!uploadedFile.value) {
       router.replace('/')
       return
     }
-    var pkg = uploadedPackageJson.value
-    rootId.value = (pkg.name || 'uploaded-project') + '@' + (pkg.version || '0.0.0')
-    pendingGraphBuilder = buildGraphFromJson(pkg, { includeDevDeps: includeDevDeps.value }, progressChanged)
+    var upload = uploadedFile.value
+    if (upload.type === 'lock') {
+      // Lock files don't carry a project name. Use a stable synthetic root id.
+      rootId.value = 'project@from-lock'
+    } else {
+      var pkg = upload.data
+      rootId.value = (pkg.name || 'uploaded-project') + '@' + (pkg.version || '0.0.0')
+    }
+    pendingGraphBuilder = buildGraphFromUpload(upload, {
+      includeDevDeps: includeDevDeps.value,
+      includeOverrides: includeOverrides.value,
+      projectName: 'project',
+      projectVersion: 'from-lock',
+    }, progressChanged)
   } else {
     var pkgId = route.params.pkgId
     var version = route.params.version
