@@ -1,29 +1,7 @@
-import toGravatar from './toGravatar.js'
-
-export default function getAllMaintainers(graph) {
-  var histogram = {}
-  var maintainers = []
-  graph.forEachNode(function (node) {
-    var data = node.data
-    if (!data.maintainers) return
-    data.maintainers.forEach(countMaintainer)
-
-    function countMaintainer(maintainer) {
-      var record = histogram[maintainer.email]
-      if (!record) {
-        record = histogram[maintainer.email] = toGravatar(maintainer)
-        record.count = 0
-        record.packages = []
-        maintainers.push(record)
-      }
-      record.count += 1
-      record.packages.push(node.id)
-    }
-  })
-
-  return maintainers.sort(byCount)
-}
-
-function byCount(x, y) {
-  return y.count - x.count
+// pub.dev's `/api/packages/{name}` endpoint does not expose maintainer/publisher
+// info on a per-package basis (it would require extra calls to /publisher/{name}).
+// We keep the export so PackageInfo.vue's import still works, but return an
+// empty list — the maintainers section in the UI just won't render.
+export default function getAllMaintainers(/* graph */) {
+  return []
 }
