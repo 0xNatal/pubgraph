@@ -114,6 +114,16 @@
       </div>
       <div class="clearfix"></div>
       <hr>
+      <div v-if="legendKinds.length" class="legend">
+        <h4>legend</h4>
+        <ul class="legend-list">
+          <li v-for="k in legendKinds" :key="k">
+            <span class="legend-swatch" :style="{ background: kindColors[k] }"></span>
+            <span class="legend-label">{{ kindLabels[k] }}</span>
+          </li>
+        </ul>
+      </div>
+      <hr v-if="legendKinds.length">
       <div class="all-licenses">
         <h4>topics</h4>
         <div class="license-container">
@@ -181,6 +191,7 @@ import getLocation from '../getLocation.js'
 import getAllTopics from '../topics.js'
 import getAllNames from '../names.js'
 import { getVulnSummary } from '../vulnerabilities.js'
+import { KIND_COLORS, KIND_LABELS, getKindsInGraph } from '../kindColors.js'
 
 const props = defineProps({
   graph: { type: Object, required: true },
@@ -221,6 +232,9 @@ const nodesCount = ref(0)
 const linksCount = ref(0)
 const allTopics = ref([])
 const allNames = ref([])
+const legendKinds = ref([])
+const kindColors = KIND_COLORS
+const kindLabels = KIND_LABELS
 
 const copyLabel = ref('copy')
 let copyTimer = null
@@ -244,6 +258,7 @@ function onGraphLoaded(graph) {
 
   allTopics.value = getAllTopics(graph)
   allNames.value = getAllNames(graph)
+  legendKinds.value = getKindsInGraph(graph)
 
   selectNode(graph.root)
   switchInfoMode('graph', false)
@@ -387,5 +402,33 @@ defineExpose({ onNodeSelected, onGraphLoaded, onVulnDataLoaded })
 .score-max {
   font-size: 11px;
   color: #888;
+}
+.legend {
+  margin: 6px 0;
+}
+.legend-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+}
+.legend-list li {
+  display: flex;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+  color: #ccd;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.legend-label {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
 }
 </style>
