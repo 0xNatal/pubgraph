@@ -1,3 +1,6 @@
+// Aggregate package names across the graph. With Dart there are no scoped
+// packages, so node.id is always "name@version" — name is just the part
+// before the FIRST '@'.
 export default function getAllNames(graph) {
   var histogram = {}
   var names = []
@@ -7,16 +10,11 @@ export default function getAllNames(graph) {
   return names.sort(byCount)
 
   function countNode(node) {
-    var parts = node.id.split('@')
-    var name
-    if (parts.length === 3) {
-      name = parts[1]
-    } else {
-      name = parts[0]
-    }
+    var id = String(node.id)
+    var idx = id.indexOf('@')
+    var name = idx > 0 ? id.substring(0, idx) : id
 
     var record = histogram[name]
-
     if (!record) {
       record = histogram[name] = Object.create(null)
       record.name = name
