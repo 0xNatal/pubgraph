@@ -8,7 +8,7 @@
           type="text"
           autofocus
           class="form-control no-shadow"
-          placeholder="npm package (e.g. browserify)"
+          placeholder="pub package (e.g. provider)"
           @input="onInput"
           @keydown.down.prevent="moveDown"
           @keydown.up.prevent="moveUp"
@@ -26,7 +26,6 @@
           >
             <a @mousedown.prevent="selectPackage(pkg)">
               <strong>{{ pkg.id }}</strong>
-              <small>{{ pkg.description }}</small>
             </a>
           </li>
         </ul>
@@ -35,22 +34,22 @@
 
     <div
       class="upload-zone"
-      :class="{ 'has-file': uploadedPackageJson }"
+      :class="{ 'has-file': uploadedPubspec }"
       @click="triggerFileInput"
     >
-      <template v-if="!uploadedPackageJson">
-        <span class="upload-prompt">or drop <strong>package.json</strong> to graph local dependencies</span>
+      <template v-if="!uploadedPubspec">
+        <span class="upload-prompt">or drop <strong>pubspec.yaml</strong> to graph local dependencies</span>
       </template>
       <template v-else>
         <div class="staged-info">
           <button class="staged-close" type="button" @click.stop="clearStaged">&times;</button>
-          <div class="staged-name">{{ uploadedPackageJson.name || 'uploaded-project' }}</div>
+          <div class="staged-name">{{ uploadedPubspec.name || 'uploaded-project' }}</div>
           <label class="dev-deps-toggle" @click.stop>
-            <input type="checkbox" v-model="devDeps"> include devDependencies
+            <input type="checkbox" v-model="devDeps"> include dev_dependencies
           </label>
         </div>
       </template>
-      <input ref="fileInput" type="file" accept=".json" hidden @change="onFileSelect">
+      <input ref="fileInput" type="file" accept=".yaml,.yml" hidden @change="onFileSelect">
     </div>
   </div>
 </template>
@@ -60,7 +59,7 @@ import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { autoCompleteUrl } from '../config.js'
 import { parsePackageId } from '../graphBuilder.js'
-import { uploadedPackageJson, includeDevDeps, handleDroppedFile } from '../uploadStore.js'
+import { uploadedPubspec, includeDevDeps, handleDroppedFile } from '../uploadStore.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -82,8 +81,8 @@ function syncQueryFromRoute() {
       var pkgId = decodeURIComponent(pathParts[1] || '')
       var version = decodeURIComponent(pathParts[2] || '')
       if (pkgId === '~upload') {
-        query.value = uploadedPackageJson.value
-          ? (uploadedPackageJson.value.name || 'uploaded-project')
+        query.value = uploadedPubspec.value
+          ? (uploadedPubspec.value.name || 'uploaded-project')
           : ''
       } else {
         query.value = version ? pkgId + '@' + version : pkgId
@@ -108,24 +107,17 @@ function fetchSuggestions() {
     return
   }
 
-  if (val.match(/^https?:\/\//)) {
-    suggestions.value = [{ id: val, description: '' }]
-    return
-  }
-
   if (val.length < 2) {
     suggestions.value = []
     return
   }
 
-  fetch(autoCompleteUrl + '&text=' + encodeURIComponent(val))
+  // pub.dev search response shape: { packages: [{ package: 'name' }, ...], next: '...' }
+  fetch(autoCompleteUrl + encodeURIComponent(val))
     .then(function (r) { return r.json() })
     .then(function (data) {
-      suggestions.value = (data.objects || []).map(function (pkg) {
-        return {
-          id: pkg.package.name,
-          description: pkg.package.description
-        }
+      suggestions.value = (data.packages || []).slice(0, 10).map(function (entry) {
+        return { id: entry.package }
       })
     })
     .catch(function () {
@@ -186,7 +178,7 @@ function navigateToPackage(name) {
 }
 
 function triggerFileInput() {
-  if (!uploadedPackageJson.value) {
+  if (!uploadedPubspec.value) {
     fileInput.value.click()
   }
 }
@@ -197,10 +189,10 @@ function onFileSelect(event) {
 }
 
 function navigateToUpload() {
-  if (!uploadedPackageJson.value) return
+  if (!uploadedPubspec.value) return
 
   includeDevDeps.value = devDeps.value
-  query.value = uploadedPackageJson.value.name || 'uploaded-project'
+  query.value = uploadedPubspec.value.name || 'uploaded-project'
   suggestions.value = []
 
   var uploadPath = route.path.indexOf('/view/3d/') !== -1
@@ -217,17 +209,17 @@ function navigateToUpload() {
 }
 
 // Auto-visualize when a file is uploaded (from drop or file picker)
-watch(uploadedPackageJson, function (val) {
+watch(uploadedPubspec, function (val) {
   if (val) navigateToUpload()
 })
 
 // Auto-re-visualize when devDeps toggle changes
 watch(devDeps, function () {
-  if (uploadedPackageJson.value) navigateToUpload()
+  if (uploadedPubspec.value) navigateToUpload()
 })
 
 function clearStaged() {
-  uploadedPackageJson.value = null
+  uploadedPubspec.value = null
   devDeps.value = false
 }
 </script>
