@@ -70,20 +70,18 @@ function fetchPackageData(ctx, work) {
 }
 
 function pickVersion(work, data) {
-  // For the ROOT node only: honor an explicit version supplied by the user
-  // (typed in the URL, or chosen from the version dropdown). For transitive
-  // dependencies we keep "latest" — proper pub_semver constraint resolution
-  // would add a lot of code for marginal value in a visualization.
-  if (work.parent !== null) return null
-
   var v = work.version
   if (!v) return null
 
   // Constraint-like strings (e.g. "^1.2.3", ">=1.0.0 <2.0.0", "any", "*")
-  // are NOT exact versions — fall back to latest.
+  // are NOT exact versions — fall back to latest. We could resolve them
+  // properly via pub_semver, but the marginal value vs. recommending a
+  // pubspec.lock upload (which is exact) is not worth the complexity.
   if (/[\^~><*\s]|^any$/i.test(v)) return null
 
-  // Exact version string. Confirm it actually exists in the versions array.
+  // Exact version. Honor it for any node — root or direct dep — as long as
+  // the version actually exists in the registry. This means a pubspec.yaml
+  // with `provider: 6.1.2` (no caret/range) gets the right version, not latest.
   var exists = data.versions && data.versions.some(function (entry) {
     return entry.version === v
   })
@@ -213,8 +211,10 @@ export function buildGraphFromPubspec(pubspec, options, changed) {
   var id = name + '@' + version
 
   // Root node from upload — wrap in a shallow copy with _kind, just like
-  // online-resolved nodes get wrapped in traverseDependencies.
-  ctx.graph.addNode(id, Object.assign({}, pubspec, { _kind: 'root' }))
+  // online-resolved nodes get wrapped in traverseDependencies. _fromYaml
+  // lets the UI distinguish a yaml upload from a lock upload (versions are
+  // approximate vs exact) and show an appropriate warning.
+  ctx.graph.addNode(id, Object.assign({}, pubspec, { _kind: 'root', _fromYaml: true }))
   ctx.processed[id] = true
 
   // Push each dep with its kind so we can color-code edges/nodes correctly.
