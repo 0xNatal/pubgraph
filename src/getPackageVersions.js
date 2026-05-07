@@ -17,8 +17,12 @@ export default function getPackageVersions(packageName) {
     })
     .then(function (data) {
       if (!data || !Array.isArray(data.versions)) return null
-      // pub.dev lists versions oldest-first; reverse so the dropdown shows newest first.
-      var versions = data.versions.map(function (v) { return v.version }).reverse()
+      // Skip retracted versions (pub.dev marks them with `retracted: true`) and
+      // reverse so the dropdown shows newest first.
+      var versions = data.versions
+        .filter(function (v) { return !v.retracted })
+        .map(function (v) { return v.version })
+        .reverse()
       cache[packageName] = versions
       return versions
     })
