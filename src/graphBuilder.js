@@ -293,6 +293,30 @@ function lockNodeId(name, entry) {
   return name + '@' + entry.source
 }
 
+// Human-readable description for non-hosted lock entries — what the panel
+// shows in place of the pub.dev description.
+function sourceDescription(entry) {
+  if (entry.source === 'sdk') {
+    var sdk = (typeof entry.description === 'string')
+      ? entry.description
+      : (entry.description && entry.description.name) || 'unknown'
+    return 'Bundled with the ' + sdk + ' SDK. Not published to pub.dev.'
+  }
+  if (entry.source === 'git') {
+    var url = entry.description && entry.description.url
+    var ref = entry.description && (entry.description.ref || entry.description['resolved-ref'])
+    var details = []
+    if (url) details.push('repo: ' + url)
+    if (ref) details.push('ref: ' + ref)
+    return 'From git source.' + (details.length ? ' ' + details.join(', ') : '')
+  }
+  if (entry.source === 'path') {
+    var path = entry.description && entry.description.path
+    return 'From local path' + (path ? ': ' + path : '') + '. Not published.'
+  }
+  return 'From ' + entry.source + ' source — not on pub.dev.'
+}
+
 function isDirectDep(depField) {
   return typeof depField === 'string' && depField.indexOf('direct') === 0
 }
@@ -346,11 +370,15 @@ export function buildGraphFromLock(lockData, options, changed) {
     if (entry.dependency === 'direct dev' && !includeDev) return
     if (entry.dependency === 'direct overridden' && !includeOverrides) return
 
+    // We always preserve the REAL version from the lock — even for git/sdk/path
+    // deps. The "0.0.0" placeholder for sdk packages and the actual semver
+    // for git deps are both useful information for the user.
     var nodeData = {
       name: name,
-      version: entry.source === 'hosted' ? entry.version : entry.source,
+      version: entry.version,
       _kind: kind,
       _fromLock: true,
+      _source: entry.source,
     }
 
     if (entry.source === 'hosted') {
@@ -358,7 +386,7 @@ export function buildGraphFromLock(lockData, options, changed) {
       fetchQueue.push({ name: name, version: entry.version, id: nodeId })
     } else {
       nodeData._unresolvable = true
-      nodeData.description = 'From ' + entry.source + ' source — not on pub.dev.'
+      nodeData.description = sourceDescription(entry)
     }
 
     ctx.graph.addNode(nodeId, nodeData)
@@ -434,7 +462,25 @@ export function buildGraphFromLock(lockData, options, changed) {
 
   return {
     graph: ctx.graph,
-    start: processFetch,
+    start: function () {
+      return processFetch().then(function () {
+        // Prune transitive nodes that ended up with no incoming edges.
+        // This typically removes things like `sky_engine` (transitive sdk dep
+        // pulled in by Flutter's framework, with no hosted ancestor we can
+        // discover via pub.dev). Showing them as floating orphans is noisy.
+        var hasIncoming = Object.create(null)
+        ctx.graph.forEachLink(function (link) {
+          hasIncoming[link.toId] = true
+        })
+        var toRemove = []
+        ctx.graph.forEachNode(function (node) {
+          if (node.id === rootId) return
+          if (!hasIncoming[node.id]) toRemove.push(node.id)
+        })
+        toRemove.forEach(function (id) { ctx.graph.removeNode(id) })
+        return ctx.graph
+      })
+    },
     errors: ctx.errors,
   }
 }
