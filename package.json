@@ -1,9 +1,17 @@
 {
   "name": "pubgraph",
   "version": "0.0.1",
-  "description": "Visualization of pub.dev (Dart/Flutter) dependencies",
+  "description": "Visualization of pub.dev (Dart/Flutter) dependencies with supply-chain vulnerability scanning",
   "private": true,
   "type": "module",
+  "homepage": "https://0xnatal.github.io/pubgraph/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xNatal/pubgraph"
+  },
+  "bugs": {
+    "url": "https://github.com/0xNatal/pubgraph/issues"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,7 +24,9 @@
     "dart",
     "flutter",
     "ngraph",
-    "dependency-graph"
+    "dependency-graph",
+    "supply-chain",
+    "vulnerability-scanner"
   ],
   "license": "MIT",
   "devDependencies": {
