@@ -5,8 +5,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, defineExpose } from 'vue'
 import { createScene, NodeCollection, CanvasEdgeCollection, ForceLayoutAdapter } from 'ngraph.svg'
-import { SEVERITY_COLORS, getNodeSeverity } from '../vulnerabilities.js'
-import { KIND_COLORS } from '../kindColors.js'
+import { getNodeSeverity } from '../vulnerabilities.js'
+import { KIND_COLORS, SEVERITY_COLORS } from '../palette.js'
 
 const props = defineProps({
   graph: { type: Object, required: true },
