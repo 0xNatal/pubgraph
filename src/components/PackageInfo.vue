@@ -12,6 +12,13 @@
     </div>
     <hr class="divider">
 
+    <div v-if="fromYamlUpload" class="yaml-warning">
+      <strong>Versions are approximate.</strong>
+      Constraints in pubspec.yaml (like <code>^1.0.0</code>) are resolved to <em>latest</em>,
+      not to what's actually installed. For exact versions and reliable vulnerability scanning,
+      drop your <code>pubspec.lock</code> instead.
+    </div>
+
     <div v-show="packageInfoVisible" class="packageInfo">
       <div v-if="selectedPackage && selectedPackage.name && !selectedPackage._unresolvable">
         <a :href="'https://pub.dev/packages/' + selectedPackage.name" target="_blank">{{ selectedPackage.name }}</a>
@@ -234,6 +241,7 @@ const linksCount = ref(0)
 const allTopics = ref([])
 const allNames = ref([])
 const legendKinds = ref([])
+const fromYamlUpload = ref(false)
 const kindColors = KIND_COLORS
 const kindLabels = KIND_LABELS
 
@@ -260,6 +268,7 @@ function onGraphLoaded(graph) {
   allTopics.value = getAllTopics(graph)
   allNames.value = getAllNames(graph)
   legendKinds.value = getKindsInGraph(graph)
+  fromYamlUpload.value = !!(graph.root && graph.root.data && graph.root.data._fromYaml)
 
   selectNode(graph.root)
   switchInfoMode('graph', false)
@@ -431,5 +440,26 @@ defineExpose({ onNodeSelected, onGraphLoaded, onVulnDataLoaded })
 .legend-label {
   font-family: ui-monospace, monospace;
   font-size: 11px;
+}
+.yaml-warning {
+  margin: 0 0 12px 0;
+  padding: 8px 10px;
+  background: rgba(232, 212, 79, 0.08);
+  border-left: 3px solid #E8D44F;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #ddd;
+  line-height: 1.5;
+}
+.yaml-warning strong {
+  color: #E8D44F;
+  display: block;
+  margin-bottom: 2px;
+}
+.yaml-warning code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
 }
 </style>
