@@ -6,6 +6,7 @@
 import { ref, onMounted, onUnmounted, watch, defineExpose } from 'vue'
 import { createScene, NodeCollection, CanvasEdgeCollection, ForceLayoutAdapter } from 'ngraph.svg'
 import { SEVERITY_COLORS, getNodeSeverity } from '../vulnerabilities.js'
+import { KIND_COLORS } from '../kindColors.js'
 
 const props = defineProps({
   graph: { type: Object, required: true },
@@ -147,18 +148,6 @@ function nodeFill(d, ctx) {
   if (ctx['vuln-moderate']) return SEVERITY_COLORS.MODERATE
   if (ctx['vuln-low']) return SEVERITY_COLORS.LOW
   return KIND_COLORS[d.kind] || KIND_COLORS.runtime
-}
-
-// Color palette by dependency kind. Vulnerabilities still override these.
-const KIND_COLORS = {
-  root:     '#B19CD9', // soft purple — the package the user asked about
-  runtime:  '#E8E6F0', // light/neutral — default runtime deps
-  dev:      '#7AC8E5', // blue — dev_dependencies
-  override: '#E8C547', // amber — dependency_overrides
-  sdk:      '#E8964F', // orange — flutter/dart sdk leaves
-  git:      '#888AAA', // muted gray — git deps
-  path:     '#888AAA', // muted gray — local path deps
-  external: '#888AAA', // muted gray — anything else unresolvable
 }
 
 function applyVulnStates(vulnMap) {
