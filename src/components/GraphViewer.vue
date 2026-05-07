@@ -146,7 +146,19 @@ function nodeFill(d, ctx) {
   if (ctx['vuln-high']) return SEVERITY_COLORS.HIGH
   if (ctx['vuln-moderate']) return SEVERITY_COLORS.MODERATE
   if (ctx['vuln-low']) return SEVERITY_COLORS.LOW
-  return '#E8E6F0'
+  return KIND_COLORS[d.kind] || KIND_COLORS.runtime
+}
+
+// Color palette by dependency kind. Vulnerabilities still override these.
+const KIND_COLORS = {
+  root:     '#B19CD9', // soft purple — the package the user asked about
+  runtime:  '#E8E6F0', // light/neutral — default runtime deps
+  dev:      '#7AC8E5', // blue — dev_dependencies
+  override: '#E8C547', // amber — dependency_overrides
+  sdk:      '#E8964F', // orange — flutter/dart sdk leaves
+  git:      '#888AAA', // muted gray — git deps
+  path:     '#888AAA', // muted gray — local path deps
+  external: '#888AAA', // muted gray — anything else unresolvable
 }
 
 function applyVulnStates(vulnMap) {
@@ -184,13 +196,14 @@ function initRenderer() {
       name: getPackageName(graphNode.id),
       version: getPackageVersion(graphNode.id),
       description: graphNode.data?.description || '',
+      kind: graphNode.data?._kind || 'runtime',
     }),
     size: 10,
 
     levels: [
       // Base: dot (always shown for all nodes)
       {
-        type: 'circle', radius: 2,
+        type: 'circle', radius: d => 2 + importance(d) * 3,
         fill: nodeFill,
         opacity: (d, ctx) => ctx.dimmed ? 0.4 : 1,
       },
@@ -199,7 +212,7 @@ function initRenderer() {
       {
         importance,
         layers: [
-          { type: 'circle', radius: 3,
+          { type: 'circle', radius: d => 3 + importance(d) * 4,
             fill: nodeFill,
             opacity: (d, ctx) => ctx.dimmed ? 0.4 : 1 },
           { type: 'text', text: d => d.name,
@@ -213,7 +226,7 @@ function initRenderer() {
       {
         minZoom: 2, importance,
         layers: [
-          { type: 'circle', radius: 4,
+          { type: 'circle', radius: d => 4 + importance(d) * 5,
             fill: nodeFill,
             opacity: (d, ctx) => ctx.dimmed ? 0.4 : 1 },
           { type: 'text', text: d => d.name,
@@ -230,7 +243,7 @@ function initRenderer() {
       {
         minZoom: 3.5, importance,
         layers: [
-          { type: 'circle', radius: 4,
+          { type: 'circle', radius: d => 4 + importance(d) * 5,
             fill: nodeFill,
             opacity: (d, ctx) => ctx.dimmed ? 0.4 : 1 },
           { type: 'text', text: d => d.name,
