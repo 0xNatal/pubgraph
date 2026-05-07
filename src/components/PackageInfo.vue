@@ -171,6 +171,7 @@
               :class="{ selected: sev.selected }"
               @click.prevent="highlightNodes(sev, $event)"
             >
+              <span class="legend-swatch" :style="{ background: sev.color }"></span>
               <span :style="{ color: sev.color }">{{ sev.name }}</span>
               <span class="last">{{ sev.count }}</span>
             </a>
