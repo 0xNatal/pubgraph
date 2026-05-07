@@ -192,7 +192,7 @@ import getLocation from '../getLocation.js'
 import getAllTopics from '../topics.js'
 import getAllNames from '../names.js'
 import { getVulnSummary } from '../vulnerabilities.js'
-import { KIND_COLORS, KIND_LABELS, getKindsInGraph } from '../kindColors.js'
+import { KIND_COLORS, KIND_LABELS, getKindsInGraph } from '../palette.js'
 
 const props = defineProps({
   graph: { type: Object, required: true },
