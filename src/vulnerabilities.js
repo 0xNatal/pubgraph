@@ -1,11 +1,11 @@
+import { SEVERITY_COLORS } from './palette.js'
+
+// SEVERITY_ORDER stays here — it's logic (severity ranking), not styling.
 export var SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW']
 
-export var SEVERITY_COLORS = {
-  CRITICAL: '#DC5F65',
-  HIGH: '#E8964F',
-  MODERATE: '#E8D44F',
-  LOW: '#A0A0B8'
-}
+// Re-export so existing `import { SEVERITY_COLORS } from './vulnerabilities.js'`
+// statements keep working. New code should import from './palette.js' directly.
+export { SEVERITY_COLORS }
 
 // Dart node IDs look like "name@1.2.3" or "name@sdk:flutter" (unresolvable leaves).
 // We only scan resolvable nodes — those with a real semver-ish version.
