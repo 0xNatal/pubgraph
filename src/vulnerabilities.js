@@ -7,11 +7,21 @@ export var SEVERITY_COLORS = {
   LOW: '#A0A0B8'
 }
 
+// Dart node IDs look like "name@1.2.3" or "name@sdk:flutter" (unresolvable leaves).
+// We only scan resolvable nodes — those with a real semver-ish version.
 function parseNodeId(nodeId) {
   var str = String(nodeId)
-  var idx = str.lastIndexOf('@')
+  var idx = str.indexOf('@')
   if (idx <= 0) return { name: str, version: '' }
   return { name: str.substring(0, idx), version: str.substring(idx + 1) }
+}
+
+function isScannableVersion(version) {
+  if (!version) return false
+  // Skip pseudo-versions used for unresolvable leaves: sdk:..., git, path, etc.
+  if (version.indexOf(':') !== -1) return false
+  if (version === 'git' || version === 'path' || version === 'external') return false
+  return true
 }
 
 function normalizeSeverity(sev) {
@@ -38,8 +48,9 @@ export function scanVulnerabilities(graph, opts) {
 
   graph.forEachNode(function (node) {
     var parsed = parseNodeId(node.id)
-    if (!parsed.version) return
-    queries.push({ package: { name: parsed.name, ecosystem: 'npm' }, version: parsed.version })
+    if (!isScannableVersion(parsed.version)) return
+    // OSV.dev ecosystem name for pub.dev is "Pub" (capital P).
+    queries.push({ package: { name: parsed.name, ecosystem: 'Pub' }, version: parsed.version })
     nodeIds.push(node.id)
   })
 
@@ -60,7 +71,6 @@ export function scanVulnerabilities(graph, opts) {
       return { results: data.results || [], nodeIds: batchNodeIds[batchIdx] }
     })
   })).then(function (batchResults) {
-    // Collect unique vuln IDs and map them to nodeIds
     var vulnIdToNodes = {}
     var uniqueVulnIds = []
 
@@ -85,7 +95,6 @@ export function scanVulnerabilities(graph, opts) {
 
     onProgress('Fetching vulnerability details (' + uniqueVulnIds.length + ')...')
 
-    // Step 2: Fetch details in parallel, 10 at a time
     var detailChunks = chunk(uniqueVulnIds, 10)
     var vulnDetails = {}
 
@@ -99,7 +108,6 @@ export function scanVulnerabilities(graph, opts) {
         }))
       })
     }, Promise.resolve()).then(function () {
-      // Step 3: Build the result map
       var resultMap = new Map()
 
       uniqueVulnIds.forEach(function (vulnId) {
@@ -117,7 +125,6 @@ export function scanVulnerabilities(graph, opts) {
           var parsed = parseNodeId(nid)
           var fixedVersion = null
 
-          // Find fixed version for this specific package
           if (detail.affected) {
             detail.affected.forEach(function (aff) {
               if (aff.package && aff.package.name === parsed.name && aff.ranges) {
