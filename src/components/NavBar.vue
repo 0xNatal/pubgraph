@@ -34,22 +34,25 @@
 
     <div
       class="upload-zone"
-      :class="{ 'has-file': uploadedPubspec }"
+      :class="{ 'has-file': uploadedFile }"
       @click="triggerFileInput"
     >
-      <template v-if="!uploadedPubspec">
-        <span class="upload-prompt">or drop <strong>pubspec.yaml</strong> to graph local dependencies</span>
+      <template v-if="!uploadedFile">
+        <span class="upload-prompt">or drop <strong>pubspec.yaml</strong> or <strong>pubspec.lock</strong> to graph local dependencies</span>
       </template>
       <template v-else>
         <div class="staged-info">
           <button class="staged-close" type="button" @click.stop="clearStaged">&times;</button>
-          <div class="staged-name">{{ uploadedPubspec.name || 'uploaded-project' }}</div>
+          <div class="staged-name">
+            {{ uploadedDisplayName }}
+            <span class="staged-type" :class="'staged-type-' + uploadedFile.type">{{ uploadedFile.type === 'lock' ? 'lock — exact' : 'pubspec — constraints' }}</span>
+          </div>
           <label class="dev-deps-toggle" @click.stop>
             <input type="checkbox" v-model="devDeps"> include dev_dependencies
           </label>
         </div>
       </template>
-      <input ref="fileInput" type="file" accept=".yaml,.yml" hidden @change="onFileSelect">
+      <input ref="fileInput" type="file" accept=".yaml,.yml,.lock" hidden @change="onFileSelect">
     </div>
   </div>
 </template>
@@ -59,7 +62,7 @@ import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { autoCompleteUrl } from '../config.js'
 import { parsePackageId } from '../graphBuilder.js'
-import { uploadedPubspec, includeDevDeps, handleDroppedFile } from '../uploadStore.js'
+import { uploadedFile, uploadedDisplayName, includeDevDeps, handleDroppedFile } from '../uploadStore.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -81,9 +84,7 @@ function syncQueryFromRoute() {
       var pkgId = decodeURIComponent(pathParts[1] || '')
       var version = decodeURIComponent(pathParts[2] || '')
       if (pkgId === '~upload') {
-        query.value = uploadedPubspec.value
-          ? (uploadedPubspec.value.name || 'uploaded-project')
-          : ''
+        query.value = uploadedDisplayName.value
       } else {
         query.value = version ? pkgId + '@' + version : pkgId
       }
@@ -178,7 +179,7 @@ function navigateToPackage(name) {
 }
 
 function triggerFileInput() {
-  if (!uploadedPubspec.value) {
+  if (!uploadedFile.value) {
     fileInput.value.click()
   }
 }
@@ -189,10 +190,10 @@ function onFileSelect(event) {
 }
 
 function navigateToUpload() {
-  if (!uploadedPubspec.value) return
+  if (!uploadedFile.value) return
 
   includeDevDeps.value = devDeps.value
-  query.value = uploadedPubspec.value.name || 'uploaded-project'
+  query.value = uploadedDisplayName.value
   suggestions.value = []
 
   var uploadPath = route.path.indexOf('/view/3d/') !== -1
@@ -209,17 +210,39 @@ function navigateToUpload() {
 }
 
 // Auto-visualize when a file is uploaded (from drop or file picker)
-watch(uploadedPubspec, function (val) {
+watch(uploadedFile, function (val) {
   if (val) navigateToUpload()
 })
 
 // Auto-re-visualize when devDeps toggle changes
 watch(devDeps, function () {
-  if (uploadedPubspec.value) navigateToUpload()
+  if (uploadedFile.value) navigateToUpload()
 })
 
 function clearStaged() {
-  uploadedPubspec.value = null
+  uploadedFile.value = null
   devDeps.value = false
 }
 </script>
+
+<style scoped>
+.staged-type {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+}
+.staged-type-lock {
+  background: #2d4a3d;
+  color: #7FE3A0;
+}
+.staged-type-pubspec {
+  background: #3d3d2a;
+  color: #E8D44F;
+}
+</style>
