@@ -44,7 +44,31 @@
 
         <div v-if="selectedPackage.topics && selectedPackage.topics.length" class="package-topics">
           <h4>topics</h4>
-          <span v-for="t in selectedPackage.topics" :key="t" class="topic-chip">{{ t }}</span>
+          <a v-for="t in selectedPackage.topics" :key="t" class="topic-chip"
+             :href="'https://pub.dev/packages?q=topic%3A' + encodeURIComponent(t)"
+             target="_blank" rel="noopener">{{ t }}</a>
+        </div>
+
+        <div v-if="score" class="package-score">
+          <h4>pub.dev score</h4>
+          <div class="score-grid">
+            <div v-if="score.grantedPoints !== null" class="score-cell">
+              <div class="score-label">pub points</div>
+              <div class="score-value">{{ score.grantedPoints }}<span v-if="score.maxPoints" class="score-max"> / {{ score.maxPoints }}</span></div>
+            </div>
+            <div v-if="score.likeCount !== null" class="score-cell">
+              <div class="score-label">likes</div>
+              <div class="score-value">{{ score.likeCount }}</div>
+            </div>
+            <div v-if="score.popularityScore !== null" class="score-cell">
+              <div class="score-label">popularity</div>
+              <div class="score-value">{{ Math.round(score.popularityScore * 100) }}%</div>
+            </div>
+            <div v-if="score.downloadCount30 !== null" class="score-cell">
+              <div class="score-label">30d downloads</div>
+              <div class="score-value">{{ score.downloadCount30.toLocaleString() }}</div>
+            </div>
+          </div>
         </div>
 
         <div v-if="selectedPackage.environment" class="package-env">
@@ -152,6 +176,7 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import getPackageVersions from '../getPackageVersions.js'
+import getPackageScore from '../score.js'
 import getLocation from '../getLocation.js'
 import getAllTopics from '../topics.js'
 import getAllNames from '../names.js'
@@ -190,6 +215,7 @@ watch(() => props.vulnMap, (vulnMap) => {
 const selectedPackage = ref(null)
 const versions = ref(null)
 const selectedVersion = ref('')
+const score = ref(null)
 
 const nodesCount = ref(0)
 const linksCount = ref(0)
@@ -232,6 +258,7 @@ function selectNode(node) {
   selectedPackage.value = data
   selectedNodeId = node.id
   versions.value = null
+  score.value = null
 
   if (!data.remote && !data._unresolvable) {
     var name = data.name
@@ -239,6 +266,12 @@ function selectNode(node) {
       if (v && selectedPackage.value && selectedPackage.value.name === name) {
         versions.value = v
         selectedVersion.value = data.version
+      }
+    })
+    getPackageScore(name).then(function (s) {
+      // Guard against race: user might have clicked another node in the meantime.
+      if (s && selectedPackage.value && selectedPackage.value.name === name) {
+        score.value = s
       }
     })
   }
@@ -307,6 +340,12 @@ defineExpose({ onNodeSelected, onGraphLoaded, onVulnDataLoaded })
   margin: 2px 4px 2px 0;
   border-radius: 10px;
   font-size: 11px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.topic-chip:hover {
+  background: #3a3a4d;
+  color: #fff;
 }
 .package-links ul.link-list,
 .package-env ul.env-list {
@@ -318,5 +357,35 @@ defineExpose({ onNodeSelected, onGraphLoaded, onVulnDataLoaded })
 .package-env li {
   padding: 2px 0;
   font-size: 12px;
+}
+.package-score {
+  margin-top: 12px;
+}
+.score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+.score-cell {
+  background: #22222e;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.score-label {
+  font-size: 10px;
+  color: #8a8aa0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.score-value {
+  font-size: 14px;
+  color: #ddd;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.score-max {
+  font-size: 11px;
+  color: #888;
 }
 </style>
