@@ -60,10 +60,25 @@ function fetchPackageData(ctx, work) {
   })
 }
 
-function pickVersion(/* work, data */) {
-  // Pragmatic: always latest. Replace later with constraint resolution if needed.
-  // (data.latest.version is always the highest stable published version.)
-  return null // signals "use data.latest"
+function pickVersion(work, data) {
+  // For the ROOT node only: honor an explicit version supplied by the user
+  // (typed in the URL, or chosen from the version dropdown). For transitive
+  // dependencies we keep "latest" — proper pub_semver constraint resolution
+  // would add a lot of code for marginal value in a visualization.
+  if (work.parent !== null) return null
+
+  var v = work.version
+  if (!v) return null
+
+  // Constraint-like strings (e.g. "^1.2.3", ">=1.0.0 <2.0.0", "any", "*")
+  // are NOT exact versions — fall back to latest.
+  if (/[\^~><*\s]|^any$/i.test(v)) return null
+
+  // Exact version string. Confirm it actually exists in the versions array.
+  var exists = data.versions && data.versions.some(function (entry) {
+    return entry.version === v
+  })
+  return exists ? v : null
 }
 
 function processQueue(ctx) {
