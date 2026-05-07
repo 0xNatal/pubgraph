@@ -1,6 +1,23 @@
 import createGraph from 'ngraph.graph'
-import semver from 'semver'
 import { registryUrl } from './config.js'
+
+/*
+ * graphBuilder for pub.dev (Dart / Flutter packages).
+ *
+ * Differences vs. the npm version:
+ *   - pub.dev returns { name, latest, versions: [{version, pubspec}, ...] } per package.
+ *   - Pubspec dep maps can contain three forms of values:
+ *       1. a string version constraint:  "^1.2.3" | ">=1.0.0 <2.0.0"
+ *       2. an SDK dep:                   { sdk: 'flutter' }
+ *       3. a git/path dep:               { git: '...' } | { path: '...' } | { hosted: '...' }
+ *     Forms 2 and 3 are NOT resolvable via pub.dev — we treat them as leaf nodes.
+ *   - We use snake_case `dev_dependencies` (pubspec convention).
+ *   - Version resolution is pragmatic: we always render the package against its
+ *     `latest` published version. Building a full pub_semver constraint solver
+ *     in the browser is doable but adds a lot of code for marginal value in a
+ *     visualization.  If you want it later, swap pickVersion() for one that
+ *     walks `data.versions` and picks the highest match for `work.version`.
+ */
 
 function httpGet(url) {
   return fetch(url).then(function (r) {
@@ -9,67 +26,44 @@ function httpGet(url) {
   })
 }
 
-function escapeName(name) {
-  return name && name.replace('/', '%2f')
+// Anything that isn't a plain string version constraint = unresolvable leaf.
+// Examples that hit this branch:
+//   { sdk: 'flutter' }
+//   { git: 'https://github.com/foo/bar.git' }
+//   { path: '../local_pkg' }
+//   { hosted: { name: 'x', url: '...' }, version: '^1.0.0' }
+function isUnresolvable(versionSpec) {
+  return versionSpec !== null && typeof versionSpec === 'object'
 }
 
-function guessVersion(versionString, packageJson) {
-  if (versionString === 'latest') versionString = '*'
-
-  var availableVersions = Object.keys(packageJson.versions)
-  var version = semver.maxSatisfying(availableVersions, versionString, true)
-
-  if (!version && versionString === '*' && availableVersions.every(function (av) {
-    return new semver.SemVer(av, true).prerelease.length
-  })) {
-    version = packageJson['dist-tags'] && packageJson['dist-tags'].latest
-  }
-
-  if (!version) throw Error('could not find a satisfactory version for string ' + versionString)
-  return version
-}
-
-function isRemote(version) {
-  return typeof version === 'string' && (
-    version.indexOf('git') === 0 ||
-    version.indexOf('http') === 0 ||
-    version.indexOf('file') === 0 ||
-    version.indexOf('github:') === 0 ||
-    version.indexOf('bitbucket:') === 0 ||
-    version.indexOf('gitlab:') === 0 ||
-    version.indexOf('/') !== -1 // GitHub shorthand: user/repo or user/repo#ref
-  )
-}
-
-function isHttp(name) {
-  return typeof name === 'string' && name.match(/^https?:\/\//)
+// Short, human-readable label for leaf nodes that we can't resolve.
+function describeUnresolvable(versionSpec) {
+  if (!versionSpec || typeof versionSpec !== 'object') return ''
+  if (versionSpec.sdk) return 'sdk:' + versionSpec.sdk
+  if (versionSpec.git) return 'git'
+  if (versionSpec.path) return 'path'
+  if (versionSpec.hosted) return 'hosted:custom'
+  return 'external'
 }
 
 function fetchPackageData(ctx, work) {
-  var cacheKey = isRemote(work.version) ? work.name + work.version : work.name
-  var cached = ctx.cache[cacheKey]
+  if (isUnresolvable(work.version)) {
+    return Promise.resolve(null) // signal: leaf
+  }
+
+  var cached = ctx.cache[work.name]
   if (cached) return Promise.resolve(cached)
 
-  if (isRemote(work.version)) return Promise.resolve({})
-
-  var escapedName = escapeName(work.name)
-  if (!escapedName && isHttp(work.name)) {
-    return httpGet(work.name).then(function (pkgJSON) {
-      pkgJSON._id = pkgJSON.name + '@' + pkgJSON.version
-      var versions = {}
-      versions[pkgJSON.version] = pkgJSON
-      return { versions: versions }
-    })
-  }
-
-  if (!escapedName) {
-    return Promise.reject(new Error('Escaped name is missing for ' + work.name))
-  }
-
-  return httpGet(registryUrl + escapedName).then(function (data) {
-    ctx.cache[cacheKey] = data
+  return httpGet(registryUrl + encodeURIComponent(work.name)).then(function (data) {
+    ctx.cache[work.name] = data
     return data
   })
+}
+
+function pickVersion(/* work, data */) {
+  // Pragmatic: always latest. Replace later with constraint resolution if needed.
+  // (data.latest.version is always the highest stable published version.)
+  return null // signals "use data.latest"
 }
 
 function processQueue(ctx) {
@@ -92,23 +86,30 @@ function processQueue(ctx) {
     })
 }
 
-function traverseDependencies(ctx, work, packageJson) {
-  var version, pkg, id
+function traverseDependencies(ctx, work, data) {
+  var pubspec, id, versionString
 
-  if (isRemote(work.version)) {
-    version = ''
-    pkg = packageJson
-    id = work.version
+  if (data === null) {
+    // Unresolvable leaf (sdk/git/path).
+    var label = describeUnresolvable(work.version)
+    id = work.name + '@' + label
+    pubspec = {
+      name: work.name,
+      version: label,
+      _unresolvable: true,
+      description: 'Dependency from ' + label + '. Not resolved through pub.dev.'
+    }
   } else {
-    version = guessVersion(work.version, packageJson)
-    pkg = packageJson.versions[version]
-    id = pkg._id
+    var picked = pickVersion(work, data)
+    var entry = picked ? data.versions.find(function (v) { return v.version === picked }) : data.latest
+    if (!entry) entry = data.latest
+    pubspec = entry.pubspec
+    versionString = entry.version
+    id = pubspec.name + '@' + versionString
   }
 
-  var dependencies = pkg.dependencies
-
   ctx.graph.beginUpdate()
-  ctx.graph.addNode(id, pkg)
+  ctx.graph.addNode(id, pubspec)
 
   if (work.parent && !ctx.graph.hasLink(work.parent, id)) {
     ctx.graph.addLink(work.parent, id)
@@ -118,19 +119,24 @@ function traverseDependencies(ctx, work, packageJson) {
   if (ctx.processed[id]) return
   ctx.processed[id] = true
 
-  if (dependencies) {
-    Object.keys(dependencies).forEach(function (name) {
+  if (data === null) return // leaf has no children
+
+  var deps = pubspec.dependencies
+  if (deps) {
+    Object.keys(deps).forEach(function (name) {
       ctx.queue.push({
         name: name,
-        version: dependencies[name],
+        version: deps[name],
         parent: id
       })
     })
   }
 }
 
+// Parse "package_name@1.2.3" or "package_name". Pub package names never contain '@',
+// so this is simpler than the npm version (no scoped packages).
 export function parsePackageId(pkgId) {
-  var idx = pkgId.indexOf('@', pkgId.charAt(0) === '@' ? 1 : 0)
+  var idx = pkgId.indexOf('@')
   if (idx > 0) {
     return { name: pkgId.slice(0, idx), version: pkgId.slice(idx + 1) }
   }
@@ -147,9 +153,8 @@ export default function buildGraph(pkgName, version, changed) {
     changed: changed
   }
 
-  if (!version) version = 'latest'
-
-  ctx.queue.push({ name: pkgName, version: version, parent: null })
+  // version param is currently ignored (we always use latest); kept for API compat.
+  ctx.queue.push({ name: pkgName, version: version || '', parent: null })
 
   return {
     graph: ctx.graph,
@@ -158,7 +163,8 @@ export default function buildGraph(pkgName, version, changed) {
   }
 }
 
-export function buildGraphFromJson(packageJson, options, changed) {
+// Build a graph from a locally-uploaded pubspec.yaml (already parsed to an object).
+export function buildGraphFromPubspec(pubspec, options, changed) {
   var ctx = {
     graph: createGraph(),
     cache: Object.create(null),
@@ -168,16 +174,19 @@ export function buildGraphFromJson(packageJson, options, changed) {
     changed: changed
   }
 
-  var name = packageJson.name || 'uploaded-project'
-  var version = packageJson.version || '0.0.0'
+  var name = pubspec.name || 'uploaded-project'
+  var version = pubspec.version || '0.0.0'
   var id = name + '@' + version
 
-  ctx.graph.addNode(id, packageJson)
+  ctx.graph.addNode(id, pubspec)
   ctx.processed[id] = true
 
-  var deps = Object.assign({}, packageJson.dependencies)
+  var deps = Object.assign({}, pubspec.dependencies)
   if (options && options.includeDevDeps) {
-    Object.assign(deps, packageJson.devDependencies)
+    Object.assign(deps, pubspec.dev_dependencies)
+  }
+  if (options && options.includeOverrides) {
+    Object.assign(deps, pubspec.dependency_overrides)
   }
 
   Object.keys(deps).forEach(function (depName) {
@@ -190,3 +199,6 @@ export function buildGraphFromJson(packageJson, options, changed) {
     errors: ctx.errors
   }
 }
+
+// Backwards-compatible alias so existing imports of buildGraphFromJson keep working.
+export { buildGraphFromPubspec as buildGraphFromJson }
