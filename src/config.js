@@ -1,2 +1,2 @@
-export const registryUrl = 'https://registry.npmjs.org/'
-export const autoCompleteUrl = 'https://registry.npmjs.org/-/v1/search?size=10&from=0'
+export const registryUrl = 'https://pub.dev/api/packages/'
+export const autoCompleteUrl = 'https://pub.dev/api/search?q='
