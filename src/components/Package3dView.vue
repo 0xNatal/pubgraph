@@ -45,9 +45,9 @@
 <script setup>
 import { ref, shallowRef, reactive, markRaw, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import buildGraph, { buildGraphFromJson, parsePackageId } from '../graphBuilder.js'
+import buildGraph, { buildGraphFromUpload, parsePackageId } from '../graphBuilder.js'
 import getLocation from '../getLocation.js'
-import { uploadedPackageJson, includeDevDeps } from '../uploadStore.js'
+import { uploadedFile, includeDevDeps, includeOverrides } from '../uploadStore.js'
 import { scanVulnerabilities } from '../vulnerabilities.js'
 import PackageInfo from './PackageInfo.vue'
 
@@ -73,12 +73,16 @@ onMounted(() => {
   var graphBuilder
 
   if (route.params.pkgId === '~upload') {
-    if (!uploadedPackageJson.value) {
+    if (!uploadedFile.value) {
       router.replace('/')
       return
     }
-    var pkg = uploadedPackageJson.value
-    graphBuilder = buildGraphFromJson(pkg, { includeDevDeps: includeDevDeps.value }, progressChanged)
+    graphBuilder = buildGraphFromUpload(uploadedFile.value, {
+      includeDevDeps: includeDevDeps.value,
+      includeOverrides: includeOverrides.value,
+      projectName: 'project',
+      projectVersion: 'from-lock',
+    }, progressChanged)
   } else {
     var pkgId = route.params.pkgId
     var version = route.params.version
@@ -134,9 +138,15 @@ function graphLoaded(buildErrors) {
 
   // Set graph.root so PackageInfo.onGraphLoaded can select it
   var g = graph.value
-  var rootId = route.params.pkgId === '~upload'
-    ? (uploadedPackageJson.value.name || 'uploaded-project') + '@' + (uploadedPackageJson.value.version || '0.0.0')
-    : null
+  var rootId = null
+  if (route.params.pkgId === '~upload' && uploadedFile.value) {
+    if (uploadedFile.value.type === 'lock') {
+      rootId = 'project@from-lock'
+    } else {
+      var pkg = uploadedFile.value.data
+      rootId = (pkg.name || 'uploaded-project') + '@' + (pkg.version || '0.0.0')
+    }
+  }
   if (!g.root) {
     if (rootId) {
       g.root = g.getNode(rootId)
