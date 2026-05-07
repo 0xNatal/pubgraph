@@ -1,12 +1,16 @@
-// Shared color palette + labels for dependency-kind classification.
-// Used by both the graph renderer (GraphViewer.vue) and the legend
-// (PackageInfo.vue). Single source of truth — keep them in sync.
+// Single source of truth for all colors used in the visualization.
+// Imported by the renderer (GraphViewer.vue), the side panel (PackageInfo.vue),
+// and the vulnerability scanner (vulnerabilities.js).
+
+// -------- Dependency-kind palette --------
+// Used to color-code nodes by how they relate to the root package.
+// Vulnerability colors (below) take precedence in the renderer when present.
 
 export const KIND_COLORS = {
-  root:     '#B19CD9', // soft purple — the package the user asked about
+  root:     '#7FE3A0', // mint green — the package the user asked about (stands out)
   runtime:  '#E8E6F0', // light/neutral — default runtime deps
-  dev:      '#7AC8E5', // blue — dev_dependencies
-  override: '#E8C547', // amber — dependency_overrides
+  dev:      '#5BA8E0', // saturated blue — dev_dependencies
+  override: '#C77DFF', // vivid purple — dependency_overrides (rare/intentional)
   sdk:      '#E8964F', // orange — flutter/dart sdk leaves
   git:      '#888AAA', // muted gray — git deps
   path:     '#888AAA', // muted gray — local path deps
@@ -36,4 +40,15 @@ export function getKindsInGraph(graph) {
     if (k) present[k] = true
   })
   return KIND_ORDER.filter(function (k) { return present[k] })
+}
+
+// -------- Vulnerability severity palette --------
+// Severity colors override kind colors in the renderer — security signals
+// should always win visually.
+
+export const SEVERITY_COLORS = {
+  CRITICAL: '#DC5F65',
+  HIGH:     '#E8964F',
+  MODERATE: '#E8D44F',
+  LOW:      '#A0A0B8',
 }
