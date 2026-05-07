@@ -46,6 +46,15 @@ function describeUnresolvable(versionSpec) {
   return 'external'
 }
 
+// Bucket an unresolvable spec into a coarse kind for color-coding.
+function kindOfUnresolvable(versionSpec) {
+  if (!versionSpec || typeof versionSpec !== 'object') return 'external'
+  if (versionSpec.sdk) return 'sdk'
+  if (versionSpec.git) return 'git'
+  if (versionSpec.path) return 'path'
+  return 'external'
+}
+
 function fetchPackageData(ctx, work) {
   if (isUnresolvable(work.version)) {
     return Promise.resolve(null) // signal: leaf
@@ -102,12 +111,14 @@ function processQueue(ctx) {
 }
 
 function traverseDependencies(ctx, work, data) {
-  var pubspec, id, versionString
+  var pubspec, id, versionString, kind
 
   if (data === null) {
-    // Unresolvable leaf (sdk/git/path).
+    // Unresolvable leaf (sdk/git/path) — its kind comes from the spec itself,
+    // overriding whatever the parent edge would have suggested.
     var label = describeUnresolvable(work.version)
     id = work.name + '@' + label
+    kind = kindOfUnresolvable(work.version)
     pubspec = {
       name: work.name,
       version: label,
@@ -121,10 +132,15 @@ function traverseDependencies(ctx, work, data) {
     pubspec = entry.pubspec
     versionString = entry.version
     id = pubspec.name + '@' + versionString
+    kind = work.kind || 'runtime'
   }
 
+  // Wrap pubspec in a shallow copy so we can attach _kind without polluting
+  // the cached package data (which is shared across nodes).
+  var nodeData = Object.assign({}, pubspec, { _kind: kind })
+
   ctx.graph.beginUpdate()
-  ctx.graph.addNode(id, pubspec)
+  ctx.graph.addNode(id, nodeData)
 
   if (work.parent && !ctx.graph.hasLink(work.parent, id)) {
     ctx.graph.addLink(work.parent, id)
@@ -136,13 +152,16 @@ function traverseDependencies(ctx, work, data) {
 
   if (data === null) return // leaf has no children
 
+  // Transitive deps are always runtime — pub.dev's API only gives us runtime
+  // deps for packages we walk into, never their dev_dependencies.
   var deps = pubspec.dependencies
   if (deps) {
     Object.keys(deps).forEach(function (name) {
       ctx.queue.push({
         name: name,
         version: deps[name],
-        parent: id
+        parent: id,
+        kind: 'runtime'
       })
     })
   }
@@ -168,8 +187,8 @@ export default function buildGraph(pkgName, version, changed) {
     changed: changed
   }
 
-  // version param is currently ignored (we always use latest); kept for API compat.
-  ctx.queue.push({ name: pkgName, version: version || '', parent: null })
+  // version param is honored on the root node only (see pickVersion).
+  ctx.queue.push({ name: pkgName, version: version || '', parent: null, kind: 'root' })
 
   return {
     graph: ctx.graph,
@@ -193,20 +212,21 @@ export function buildGraphFromPubspec(pubspec, options, changed) {
   var version = pubspec.version || '0.0.0'
   var id = name + '@' + version
 
-  ctx.graph.addNode(id, pubspec)
+  // Root node from upload — wrap in a shallow copy with _kind, just like
+  // online-resolved nodes get wrapped in traverseDependencies.
+  ctx.graph.addNode(id, Object.assign({}, pubspec, { _kind: 'root' }))
   ctx.processed[id] = true
 
-  var deps = Object.assign({}, pubspec.dependencies)
-  if (options && options.includeDevDeps) {
-    Object.assign(deps, pubspec.dev_dependencies)
+  // Push each dep with its kind so we can color-code edges/nodes correctly.
+  function pushAll(map, kind) {
+    if (!map) return
+    Object.keys(map).forEach(function (depName) {
+      ctx.queue.push({ name: depName, version: map[depName], parent: id, kind: kind })
+    })
   }
-  if (options && options.includeOverrides) {
-    Object.assign(deps, pubspec.dependency_overrides)
-  }
-
-  Object.keys(deps).forEach(function (depName) {
-    ctx.queue.push({ name: depName, version: deps[depName], parent: id })
-  })
+  pushAll(pubspec.dependencies, 'runtime')
+  if (options && options.includeDevDeps) pushAll(pubspec.dev_dependencies, 'dev')
+  if (options && options.includeOverrides) pushAll(pubspec.dependency_overrides, 'override')
 
   return {
     graph: ctx.graph,
