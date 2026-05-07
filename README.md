@@ -1,53 +1,41 @@
-# npmgraph.an
+# pubgraph
 
-[Visualization of npm](https://npm.anvaka.com) shows dependency graph of an npm package.
+2D / 3D visualization of [pub.dev](https://pub.dev) (Dart / Flutter) package dependencies.
 
-# Screenshots
+A port of [anvaka/npmgraph.an](https://github.com/anvaka/npmgraph.an) to the Dart ecosystem.
 
-Default view:
-![Default view](https://raw.githubusercontent.com/anvaka/npmgraph.an/master/images/default_view.png)
+## How it works
 
+[Vue 3](https://vuejs.org/) + [Vite](https://vite.dev/) + [ngraph](https://github.com/anvaka/ngraph)
 
-Responsive view:
+- Package data comes from `pub.dev/api/packages/{name}` in real time.
+- Vulnerability data comes from [OSV.dev](https://osv.dev/) (`Pub` ecosystem).
+- Drop a local `pubspec.yaml` to graph a project that isn't on pub.dev yet.
 
-![Responsive view](https://raw.githubusercontent.com/anvaka/npmgraph.an/master/images/responsive_view.png)
-
-
-3d view:
-![3d view](https://raw.githubusercontent.com/anvaka/npmgraph.an/master/images/3d_view.png)
-
-# How it's done?
-
-[Vue 3](https://vuejs.org/) + [Vite](https://vite.dev/) + [ngraph](https://github.com/anvaka/ngraph) => https://npm.anvaka.com/
-
-The website is entirely hosted on [GitHub Pages](https://pages.github.com/).
-
-The npm data is coming from `registry.npmjs.org` and is collected at real time.
-
-# npm rocks
-
-All modules of this application are provided by [npm](https://github.com/anvaka/npmgraph.an/blob/master/package.json). 
-
-# Local development
+## Local development
 
 ```
-git clone https://github.com/anvaka/npmgraph.an.git
-cd npmgraph.an
+git clone https://github.com/0xNatal/pubgraph
+cd pubgraph
 npm install
 npm run dev
 ```
 
-This should start local dev server and serve npm visualization.
+## Notes & caveats
 
-# Other projects
+- **Version resolution is pragmatic**: every package is rendered against its `latest`
+  published version, regardless of the constraint in the parent's `dependencies`.
+  Building a full `pub_semver`-compatible constraint solver in the browser is doable
+  but adds a lot of code for marginal value in a visualization. See `pickVersion`
+  in `src/graphBuilder.js` if you want to wire it in.
+- **SDK / git / path dependencies** (e.g. `flutter: { sdk: flutter }`) are rendered
+  as leaf nodes — they aren't resolvable through pub.dev.
+- **Maintainers** are not displayed: pub.dev's per-package endpoint doesn't expose
+  publisher info. The `maintainers.js` helper is kept as a no-op stub.
+- **Licenses** were replaced with `topics`: pubspec has no `license` field (Dart
+  derives licenses from the LICENSE file in the archive), but `topics` is a
+  pubspec-native tag list that maps cleanly to the same UI.
 
-Here I will try to list other projects that visualize npm. 
+## License
 
-* https://npm.broofa.com/ - renders dependency graph with direct acyclic graph layout alrogirthm.
-* [galaxy](https://anvaka.github.io/pm/#/galaxy/npm?cx=-1345&cy=-7006&cz=-6553&lx=0.6217&ly=-0.6459&lz=0.3098&lw=0.3168&ml=150&s=1.75&l=1&v=2017-11-22T00-00-00Z) - 3D gallaxy simulator of npm packages.
-
-If you have other projects that you want to see here, please send me a pull request or a hint.
-
-# license
-
-MIT
+MIT (same as upstream)
