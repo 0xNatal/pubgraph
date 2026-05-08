@@ -11,7 +11,7 @@ export const KIND_COLORS = {
   runtime:  '#E8E6F0', // light/neutral — default runtime deps
   dev:      '#5BA8E0', // saturated blue — dev_dependencies
   override: '#C77DFF', // vivid purple — dependency_overrides (rare/intentional)
-  sdk:      '#E8964F', // orange — flutter/dart sdk leaves
+  sdk:      '#5DC4B8', // teal — flutter/dart sdk leaves (distinct from severity colors)
   git:      '#888AAA', // muted gray — git deps
   path:     '#888AAA', // muted gray — local path deps
   external: '#888AAA', // muted gray — anything else unresolvable
